@@ -522,14 +522,29 @@ if __name__ == "__main__":
     #failed = pd.read_csv('./results/10.1-failed-pyradinone.csv')
     #df = pd.read_csv('./results/10-filtered-pyradinone.csv')
 
-    df = pd.read_csv('./results/11-added-vendors.csv')
-    print(df.shape)
-    print(df[df['MOL_WT'] <= 250].shape)
-    df = df[df['MOL_WT'] <= 200]
-    df.to_csv('./results/200mw-library.csv', index=False)
-    exit()
-    draw_molecules_to_grid_image(df, './figures/zz-200mw-library.png')
+    #df = pd.read_csv('./results/11-added-vendors.csv')
+    #print(df.shape)
+    #print(df[df['MOL_WT'] <= 250].shape)
+    #df = df[df['MOL_WT'] <= 200]
+    #df.to_csv('./results/200mw-library.csv', index=False)
 
+    #draw_molecules_to_grid_image(df, './figures/zz-200mw-library.png')
+
+    df = pd.read_csv('./results/200mw-library.csv', header=0)
+    xtb = pd.read_csv('./results/pyridine_props_xtb.csv', header=0)
+    print(df.shape)
+    print(xtb.shape)
+
+
+    df = df.merge(xtb, left_on='INCHI_KEY', right_on='Name')
+    print(df)
+    print(df.shape)
+    print(df.columns)
+
+    for i, row in df.iterrows():
+        assert row['Name'] == row['INCHI_KEY']
+
+    df.to_csv('./12-added-xtb-props.csv', index=False)
 
 
 
