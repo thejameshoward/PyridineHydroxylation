@@ -6,7 +6,8 @@ from rdkit import Chem
 from rdkit.Chem import Draw
 
 def draw_molecules_to_grid_image(dataframe: pd.DataFrame,
-                                 save_path: Path):
+                                 save_path: Path,
+                                 legend_columns: list[str] = None):
     '''
     Draws the molecules in dataframe['SMILES'] to a file
     in filtered_molecules
@@ -34,12 +35,18 @@ def draw_molecules_to_grid_image(dataframe: pd.DataFrame,
 
         mols = [Chem.MolFromSmiles(s) for s in list]
 
+        legend = [s for s in list]
+        if legend_columns is not None:
+            for column in legend_columns:
+                for i, string in enumerate(legend):
+                    legend[i] = legend[i] + f'\n{dataframe.loc[dataframe["SMILES"] == string, column].value}'
+
         png = Draw.MolsToGridImage(mols,
                                 molsPerRow=grid_width,
                                 subImgSize=image_size,
                                 highlightAtomLists=None,
                                 highlightBondLists=None,
                                 returnPNG=False,
-                                legends=[f"SMILES: {s}" for s in list])
+                                legends=legend)
 
         png.save(save_path.parent / f'{save_path.name}_{i}.png')

@@ -43,6 +43,7 @@ H_4_PYR = '[#1]~c~1~c~c~n~c~c~1'
 SULFONYL_CHLORIDE = 'S([F,Cl,Br,I])(=O)=O'
 ACID_HALIDE = 'C([F,Cl,Br,I])=O'
 PYRADINONE = 'O=c:1:c:c:c:c:n1'
+FOUR_PYRADINONE = 'O=[#6]~1~[#6]~[#6]~[#7]~[#6]~[#6]~1'
 
 
 
@@ -414,10 +415,14 @@ def filter_has_acid_halides(_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFra
 def _smiles_has_pyradinone(smiles) -> tuple[str, bool]:
     mol = get_mol(smiles)
     matches = mol.GetSubstructMatches(Chem.MolFromSmarts(PYRADINONE))
-    if matches == ():
-        return smiles, False
-    else:
+    if matches != ():
         return smiles, True
+
+    matches = mol.GetSubstructMatches(Chem.MolFromSmarts(FOUR_PYRADINONE))
+    if matches != ():
+        return smiles, True
+
+    return smiles, False
 
 def filter_has_pyradinone(_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     '''
@@ -433,6 +438,7 @@ def filter_has_pyradinone(_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame
     data_df.set_index('SMILES', inplace=True)
     _df.set_index('SMILES', inplace=True)
     _df = pd.concat([df, data_df], axis=1)
+    print(df)
 
     _failed = _df[_df['HAS_PYRADINONE']].copy(deep=True)
     _df = _df[~_df['HAS_PYRADINONE']].copy(deep=True)
@@ -440,8 +446,85 @@ def filter_has_pyradinone(_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame
 
     return _df, _failed
 
+def namestr(obj, namespace):
+    return [name for name in namespace if namespace[name] is obj]
 
-#smiles = 'O=C(N1)C=C(C)C2=C1C=CC(I)=C2'
+def _smiles_has_quinoline_or_5_membered_n_heterocycle(smiles) -> tuple[str, bool]:
+    mol = get_mol(smiles)
+
+    PYRROLE = '[#6]1~[#6]~[#6]~[#6]~[#7]~1'
+    PYRAZOLE = '[#6]1~[#6]~[#6]~[#7]~[#7]~1'
+    IMIDAZOLE = 'c1:c:n:c:n:1'
+    TRIAZOLE_1 = 'c1:c:n:n:n:1'
+    TRIAZOLE_2 = 'c1:n:c:n:n:1'
+    TETRAZOLE = '[#6]1~[#7]~[#7]~[#7]~[#7]~1'
+    QUINOLINE = 'c:1:2:c:c:c:c:c:1:c:c:c:n:2'
+    ISOQUINOLINE = 'c:1:2:c:c:c:c:c:1:c:c:n:c:2'
+
+    THIENOPYRIDINE_1 = 'c:1:c:n:c:2:s:c:c:c:2:c:1'
+    THIENOPYRIDINE_2 = 'c:1:c:c:2:c:c:s:c:2:c:n:1'
+    THIENOPYRIDINE_3 = 'c:1:c:c:2:s:c:c:c:2:c:n:1'
+    THIENOPYRIDINE_4 = 'c:1:c:n:c:2:c:c:s:c:2:c:1'
+    THIAZOLE = 'c1:c:s:c:n:1'
+    OXADIAZOLE = 'c1:n:c:o:n:1'
+    OXAZOLE = 'c1:c:o:c:n:1'
+
+
+    for filter in [PYRROLE, PYRAZOLE, IMIDAZOLE, TRIAZOLE_1, TRIAZOLE_2, TETRAZOLE, QUINOLINE, ISOQUINOLINE,
+                   THIENOPYRIDINE_1, THIENOPYRIDINE_2, THIENOPYRIDINE_3, THIENOPYRIDINE_4, THIAZOLE,
+                   OXADIAZOLE, OXAZOLE]:
+
+        matches = mol.GetSubstructMatches(Chem.MolFromSmarts(filter))
+
+        #if matches == ():
+        #    print(f'No match with {namestr(filter, locals())}')
+        #else:
+        #    print(f'Match with {namestr(filter, locals())}')
+        #    Draw.ShowMol(mol, highlightAtoms=matches[0])
+
+        if matches != ():
+            return smiles, True
+
+    return smiles, False
+
+def filter_bad_heterocycles(_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    '''
+    Filters quinolines and 5 membered nitrogen heterocycles
+    '''
+    assert 'SMILES' in _df.columns
+
+    print('Filtering HAS_5MEMBERED_HETEROCYCLE_OR_QUINOLINE')
+    with Pool() as pool:
+        # Get a list of smiles,logp tuples
+        list_of_lists = pool.map(_smiles_has_quinoline_or_5_membered_n_heterocycle, list(set(_df['SMILES'])))
+    data_df = pd.DataFrame(data=list_of_lists, columns=['SMILES', 'HAS_5MEMBERED_HETEROCYCLE_OR_QUINOLINE'])
+    data_df.set_index('SMILES', inplace=True)
+    _df.set_index('SMILES', inplace=True)
+    _df = pd.concat([df, data_df], axis=1)
+
+    _failed = _df[_df['HAS_5MEMBERED_HETEROCYCLE_OR_QUINOLINE']].copy(deep=True)
+    _df = _df[~_df['HAS_5MEMBERED_HETEROCYCLE_OR_QUINOLINE']].copy(deep=True)
+    print(f'{_failed.shape[0]} molecules were removed based on HAS_5MEMBERED_HETEROCYCLE_OR_QUINOLINE. {_df.shape[0]} remain.')
+
+    return _df, _failed
+
+# canonicalize some filters
+#smiles = [
+#    'C12=C(C=CS2)C=CC=N1',
+#    'C34=C(C=CS4)C=CN=C3',
+#    'C56=C(C=CS6)C=NC=C5',
+#    'C78=C(C=CS8)N=CC=C7',
+#    'C9=CSC=N9',
+#    'N%10=CN=CO%10',
+#    'C%11=CN=CO%11'
+#]
+
+#for s in smiles:
+#    print(canonicalize_smiles(s))
+
+
+#smiles = 'C12=C(C=CN2)C=CC=C1'
+#_smiles_has_quinoline_or_5_membered_n_heterocycle(smiles)
 #
 #mol = get_mol(smiles)
 #matches = flatten(mol.GetSubstructMatches(Chem.MolFromSmarts(PYRADINONE)))
@@ -530,21 +613,37 @@ if __name__ == "__main__":
 
     #draw_molecules_to_grid_image(df, './figures/zz-200mw-library.png')
 
-    df = pd.read_csv('./results/200mw-library.csv', header=0)
-    xtb = pd.read_csv('./results/pyridine_props_xtb.csv', header=0)
+    #df = pd.read_csv('./results/200mw-library.csv', header=0)
+    #xtb = pd.read_csv('./results/pyridine_props_xtb.csv', header=0)
+    #df = df.merge(xtb, left_on='INCHI_KEY', right_on='Name')
+    #for i, row in df.iterrows():
+    #    assert row['Name'] == row['INCHI_KEY']
+    #df.to_csv('./results/12-added-xtb-props.csv', index=False)
+
+    #df = pd.read_csv('./results/12-added-xtb-props.csv', header=0)
+    #df, failed = filter_bad_heterocycles(df)
+    #failed.to_csv('./results/13-failed-bad-heterocycles.csv')
+    #df.to_csv('./results/13-filtered-bad-heterocycles.csv')
+
+    # Read in the previous dataframe
+    #df = pd.read_csv('./results/13-filtered-bad-heterocycles.csv', header=0)
+    #df.drop(columns=['HAS_PYRADINONE'], inplace=True)
+    #df, failed = filter_has_pyradinone(df)
+    #failed.to_csv('./results/14.1-failed-four-pyradinone.csv')
+    #df.to_csv('./results/14-filtered-four-pyradinone.csv')
+
+
+    # Add MORFEUS steric properties
+    df = pd.read_csv('./results/14-filtered-four-pyradinone.csv')
+    prop_df = pd.read_csv('/Users/jameshoward/Documents/Programming/XTBPropertyCalculator/data/pyridines_morfeus_parameters.csv')
     print(df.shape)
-    print(xtb.shape)
-
-
-    df = df.merge(xtb, left_on='INCHI_KEY', right_on='Name')
-    print(df)
+    print(prop_df.shape)
+    df = df.merge(prop_df, left_on='INCHI_KEY', right_on='INCHI_KEY')
+    df.to_csv('./results/15-added-morfeus-props.csv', index=False)
     print(df.shape)
-    print(df.columns)
 
-    for i, row in df.iterrows():
-        assert row['Name'] == row['INCHI_KEY']
+    #draw_molecules_to_grid_image(failed, './figures/filtered-quinolines-and-5-membered-heterocycles.png')
 
-    df.to_csv('./12-added-xtb-props.csv', index=False)
 
 
 
